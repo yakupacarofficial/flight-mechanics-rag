@@ -1,4 +1,5 @@
 venvrag/
 __pycache__/
 *.db
+*.pkl
 .DS_Store
