@@ -1,19 +1,32 @@
 """
-Retrieval degerlendirme: etiketli test sorulariyla retrieval kalitesini olcer.
+Degerlendirme.
+
+Varsayilan (hizli, servis gerekmez) - RETRIEVAL:
 - Cevaplanabilir sorular: beklenen dosya top-3'te mi? (Hit@3) ve 1. sirada mi? (Top-1)
 - Cevaplanamaz sorular: en yuksek skor esik altinda mi? (dogru reddetme)
+
+`python evaluate.py --generate` (Foundry servisi calisir olmali) - ek olarak
+UCTAN UCA URETIM:
+- Cevaplanabilir: modelin cevabi getirilen baglamda ne kadar "grounded"?
+  (cevap kelimelerinin baglamda gecme orani) ve yanlislikla reddetti mi?
+- Cevaplanamaz: model gercekten "bilmiyorum" dedi mi?
 """
-import sqlite3
-import pickle
-from sklearn.metrics.pairwise import cosine_similarity
+import argparse
+import re
 
-DB_PATH = "knowledge.db"
-VECTORIZER_PATH = "vectorizer.pkl"
-MATRIX_PATH = "tfidf_matrix.pkl"
+from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS
 
-# Cevaplanamaz sorular icin skor esigi:
-# en yuksek skor bunun altindaysa "sistem emin degil" kabul ediyoruz
-UNANSWERABLE_THRESHOLD = 0.25
+from retrieval import (
+    RETRIEVAL_MIN_SCORE, context_chunks, get_top_chunks, load_index,
+)
+
+# Cevaplanamaz sorular icin skor esigi: uretimdeki ile ayni sabit.
+# En yuksek skor bunun altindaysa "sistem emin degil" kabul ediyoruz.
+UNANSWERABLE_THRESHOLD = RETRIEVAL_MIN_SCORE
+
+# Uctan uca modda: cevabin kabul edilir sayilmasi icin gereken asgari
+# grounding orani (cevap icerik kelimelerinin baglamda gecen kismi).
+GROUNDING_MIN = 0.50
 
 # Etiketli test seti: her soru + beklenen kaynak dosya(lar)
 # answerable=False olanlar bilgi tabaninda YOK, dusuk skor bekliyoruz
@@ -52,75 +65,115 @@ TEST_SET = [
      "expected": [], "answerable": False},
 ]
 
-
-def load_index():
-    with open(VECTORIZER_PATH, "rb") as f:
-        vectorizer = pickle.load(f)
-    with open(MATRIX_PATH, "rb") as f:
-        tfidf_matrix = pickle.load(f)
-    conn = sqlite3.connect(DB_PATH)
-    rows = conn.execute("SELECT id, source, section, text FROM chunks").fetchall()
-    conn.close()
-    return vectorizer, tfidf_matrix, rows
+# Grounding hesabinda sayilmayacak kaynak-atif kaliplari
+_CITATION_NOISE = {"source", "section", "referenced", "reference", "sources"}
 
 
-def get_top_chunks(query, vectorizer, tfidf_matrix, rows, k=3):
-    query_vec = vectorizer.transform([query])
-    scores = cosine_similarity(query_vec, tfidf_matrix)[0]
-    top_idx = scores.argsort()[::-1][:k]
-    return [
-        {"score": float(scores[i]), "source": rows[i][1], "section": rows[i][2]}
-        for i in top_idx
-    ]
+def _content_words(text):
+    """Kucuk harf, >=3 harfli, stop-word olmayan kelimeler kumesi."""
+    return {w for w in re.findall(r"[a-z]{3,}", text.lower())
+            if w not in ENGLISH_STOP_WORDS}
+
+
+def is_refusal(answer):
+    """Cevabin BASI 'bilmiyorum' mu? (sonda eklenen uyariyi saymaz)"""
+    head = answer.strip().lower()[:60]
+    return ("don't have that information" in head
+            or "do not have that information" in head)
+
+
+def grounding_score(answer, chunks, question, rows):
+    """
+    Cevap icerik kelimelerinin ne kadari getirilen baglamda geciyor?
+    Baglam = modele verilen baglam (eslesen chunk'lar + komsulari).
+    Soruda gecen kelimeler haric tutulur (soruyu tekrar etmek puan olmasin).
+    Yaklasik bir olcut: paraphrase / es anlamli sozcuk puani dusurur.
+    """
+    ctx_text = " ".join(r[3] for r in context_chunks(chunks, rows))
+    ctx = _content_words(ctx_text)
+    ans = _content_words(answer) - _content_words(question) - _CITATION_NOISE
+    if not ans:
+        return 1.0
+    return len(ans & ctx) / len(ans)
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("-g", "--generate", action="store_true",
+                        help="uctan uca uretimi de calistir (Foundry servisi gerekir)")
+    args = parser.parse_args()
+
     vectorizer, tfidf_matrix, rows = load_index()
 
-    # Sayaclar
-    answerable_total = 0
-    hit_at_3 = 0
-    top_1 = 0
-    unanswerable_total = 0
-    correctly_rejected = 0
+    gen = None
+    if args.generate:
+        from foundry import get_endpoint
+        from rag import answer_query
+        url, model = get_endpoint()
+        gen = {"url": url, "model": model, "answer_query": answer_query}
+        print(f"[uctan uca mod: {model} @ {url}]")
+
+    # Retrieval sayaclari
+    answerable_total = hit_at_3 = top_1 = 0
+    unanswerable_total = correctly_rejected = 0
+    # Uretim sayaclari
+    grounded_ok = 0
+    grounding_sum = 0.0
+    false_refusals = 0
+    model_rejected = 0
 
     print("=" * 78)
-    print("RETRIEVAL DEGERLENDIRME RAPORU")
+    print("DEGERLENDIRME RAPORU" + ("  (retrieval + uretim)" if gen else "  (retrieval)"))
     print("=" * 78)
 
     for item in TEST_SET:
         results = get_top_chunks(item["q"], vectorizer, tfidf_matrix, rows, k=3)
         top_score = results[0]["score"]
         found_sources = [r["source"] for r in results]
-
-        # soruyu kisalt (ekranda okunur olsun)
         q_short = item["q"][:60] + ("..." if len(item["q"]) > 60 else "")
+
+        answer = None
+        if gen:
+            answer, _ = gen["answer_query"](
+                item["q"], gen["url"], gen["model"], vectorizer, tfidf_matrix, rows
+            )
 
         if item["answerable"]:
             answerable_total += 1
-            # beklenen dosyalardan herhangi biri top-3'te mi?
             in_top3 = any(exp in found_sources for exp in item["expected"])
             in_top1 = any(exp == found_sources[0] for exp in item["expected"])
-            if in_top3:
-                hit_at_3 += 1
-            if in_top1:
-                top_1 += 1
+            hit_at_3 += in_top3
+            top_1 += in_top1
             mark = "OK " if in_top3 else "MISS"
             rank = " (1. sirada)" if in_top1 else (" (top-3'te)" if in_top3 else "")
             print(f"\n[{mark}] {q_short}")
             print(f"      beklenen: {', '.join(item['expected'])}")
             print(f"      bulunan:  {found_sources[0]} (skor {top_score:.3f}){rank}")
+
+            if gen:
+                if is_refusal(answer):
+                    false_refusals += 1
+                    print("      uretim:   YANLIS REDDETME (cevaplanabilir soruya 'bilmiyorum')")
+                else:
+                    gscore = grounding_score(answer, results, item["q"], rows)
+                    grounding_sum += gscore
+                    ok = gscore >= GROUNDING_MIN
+                    grounded_ok += ok
+                    print(f"      uretim:   grounding {gscore:.2f} "
+                          f"({'OK' if ok else 'DUSUK'}, esik {GROUNDING_MIN})")
         else:
             unanswerable_total += 1
-            # kapsam disi: en yuksek skor esik altinda mi?
             rejected = top_score < UNANSWERABLE_THRESHOLD
-            if rejected:
-                correctly_rejected += 1
+            correctly_rejected += rejected
             mark = "OK " if rejected else "ZAYIF"
             print(f"\n[{mark}] {q_short}  (KAPSAM DISI)")
             print(f"      en yuksek skor: {top_score:.3f} "
                   f"(esik {UNANSWERABLE_THRESHOLD} -> "
                   f"{'dogru reddedildi' if rejected else 'esik ustunde, zayif sinyal'})")
+            if gen:
+                refused = is_refusal(answer)
+                model_rejected += refused
+                print(f"      uretim:   {'model bilmiyorum dedi (OK)' if refused else 'MODEL CEVAP URETTI (zayif)'}")
 
     # Ozet
     print("\n" + "=" * 78)
@@ -134,6 +187,15 @@ def main():
     print(f"Kapsam disi sorular: {unanswerable_total}")
     print(f"  Dogru reddedilen (skor < {UNANSWERABLE_THRESHOLD}): "
           f"{correctly_rejected}/{unanswerable_total}")
+
+    if gen:
+        scored = answerable_total - false_refusals
+        avg = grounding_sum / scored if scored else 0.0
+        print("\nURETIM (uctan uca):")
+        print(f"  Grounding >= {GROUNDING_MIN}: {grounded_ok}/{scored}")
+        print(f"  Ortalama grounding: {avg:.2f}")
+        print(f"  Yanlis reddetme (cevaplanabilir -> 'bilmiyorum'): {false_refusals}/{answerable_total}")
+        print(f"  Kapsam disi -> model 'bilmiyorum' dedi: {model_rejected}/{unanswerable_total}")
     print("=" * 78)
 
 

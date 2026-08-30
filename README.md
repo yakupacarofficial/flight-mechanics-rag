@@ -69,7 +69,9 @@ python rag.py
 streamlit run app.py         # opens http://localhost:8501
 ```
 
-Note on ports: Foundry Local assigns a random port on each restart. If the app can't connect, run `foundry service status` to get the current port and add it to the port list in app.py / rag.py.
+The web interface shows the answer plus an expandable panel for each retrieved chunk, so you can read the exact passage the answer was drawn from.
+
+Note on ports: Foundry Local assigns a random port on each restart. Port discovery is automatic ([foundry.py](foundry.py)): it reads the current port from `foundry service status`, falling back to a list of known ports. To force a specific endpoint, set `FOUNDRY_ENDPOINT=http://127.0.0.1:PORT` (or `FOUNDRY_PORT=PORT`) before running.
 
 ### Evaluation
 
@@ -87,6 +89,17 @@ python evaluate.py
 | Out-of-scope questions correctly rejected (score < 0.25) | 2/2 |
 
 Score distribution is meaningful: term-specific questions score high (Bernoulli 0.62, IAS/TAS 0.58), while broader questions score lower (Reynolds 0.36) but still retrieve the correct source. The two out-of-scope questions (aircraft classification and supersonic airfoils, topics intentionally left out of the knowledge base) fell below the confidence threshold, so the assistant correctly declined to answer.
+
+**End-to-end generation** (`python evaluate.py --generate`, requires the Foundry service) additionally calls the model for every question and checks the answer, not just retrieval:
+
+| Metric | Result |
+|--------|--------|
+| Lexical grounding ≥ 0.50 (answer vocabulary traceable to retrieved context) | 11/12 |
+| Average grounding | 0.66 |
+| False refusals (answerable question → "I don't know") | 0/12 |
+| Out-of-scope → model answered "I don't have that information" | 2/2 |
+
+Grounding is an approximate offline proxy (fraction of the answer's content words, minus question words, that appear in the retrieved context); paraphrasing and synonyms lower it, so ~0.65 reflects a faithful-but-reworded answer rather than verbatim copying. The context handed to the model is the matched chunks plus their immediate neighbours in the same file ([retrieval.py](retrieval.py), `CONTEXT_WINDOW`), which restores continuity broken by splitting on `##` headings; citations still list only the chunks that actually matched. The confidence gate (`RETRIEVAL_MIN_SCORE`) short-circuits both out-of-scope questions before the model is even called; the same constant is the threshold used in this report.
 
 ### Design decisions & limitations
 
@@ -156,7 +169,9 @@ python rag.py
 streamlit run app.py         # http://localhost:8501 acilir
 ```
 
-Port notu: Foundry Local her yeniden baslatmada rastgele bir port atar. Uygulama baglanamazsa, `foundry service status` ile guncel portu ogrenip app.py / rag.py icindeki port listesine ekleyin.
+Web arayuzu, cevabin yaninda getirilen her chunk icin acilir bir panel gosterir; boylece cevabin dayandigi tam pasaji okuyabilirsiniz.
+
+Port notu: Foundry Local her yeniden baslatmada rastgele bir port atar. Port bulma otomatiktir ([foundry.py](foundry.py)): guncel port `foundry service status` ciktisindan okunur, bulunamazsa bilinen portlar denenir. Belirli bir adresi zorlamak icin calistirmadan once `FOUNDRY_ENDPOINT=http://127.0.0.1:PORT` (veya `FOUNDRY_PORT=PORT`) ayarlayin.
 
 ### Degerlendirme
 
@@ -174,6 +189,17 @@ python evaluate.py
 | Dogru reddedilen kapsam disi soru (skor < 0.25) | 2/2 |
 
 Skor dagilimi anlamlidir: terime ozgu sorular yuksek (Bernoulli 0.62, IAS/TAS 0.58), daha genel sorular dusuk (Reynolds 0.36) skor alir ama yine de dogru kaynagi getirir. Iki kapsam disi soru (ucak siniflandirmasi ve supersonik kanat profilleri, bilgi tabanina bilerek alinmayan konular) guven esiginin altinda kaldigi icin asistan dogru sekilde cevap vermeyi reddetti.
+
+**Uctan uca uretim** (`python evaluate.py --generate`, Foundry servisi calisir olmali) ek olarak her soru icin modeli cagirir ve sadece retrieval'i degil cevabin kendisini de kontrol eder:
+
+| Metrik | Sonuc |
+|--------|-------|
+| Sozcuksel grounding ≥ 0.50 (cevap kelimeleri getirilen baglamda geciyor mu) | 11/12 |
+| Ortalama grounding | 0.66 |
+| Yanlis reddetme (cevaplanabilir soru → "bilmiyorum") | 0/12 |
+| Kapsam disi → model "bilgi tabanimda yok" dedi | 2/2 |
+
+Grounding yaklasik, cevrimdisi bir olcuttur (cevabin icerik kelimelerinin, soru kelimeleri haric, getirilen baglamda gecen orani); paraphrase ve es anlamli sozcukler bu orani dusurur, dolayisiyla ~0.65 birebir kopyalama degil "sadik ama yeniden ifade edilmis" bir cevabi gosterir. Modele verilen baglam, eslesen chunk'lar + ayni dosyadaki bitisik komsularidir ([retrieval.py](retrieval.py), `CONTEXT_WINDOW`); bu, `##` basligindan bolmenin kopardigi sureklilikligi geri kazandirir. Atiflar yalnizca gercekten eslesen chunk'lari listeler. Guven kapisi (`RETRIEVAL_MIN_SCORE`) iki kapsam disi soruyu model cagrilmadan once kesip atar; bu rapordaki esik de ayni sabittir.
 
 ### Tasarim kararlari ve sinirlamalar
 
