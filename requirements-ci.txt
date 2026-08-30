@@ -1,0 +1,7 @@
+# CI yalnizca saf-mantik birim testlerini calistirir; app.py (streamlit) ve
+# evaluate.py --generate import edilmez. Bu yuzden calisma-zamani kilidinin
+# (requirements.txt) tamamini degil, testlerin gercekten ihtiyac duydugu
+# uc paketi kurar. Surumler requirements.txt ile ayni.
+scikit-learn==1.9.0
+requests==2.34.2
+pytest==9.1.1
