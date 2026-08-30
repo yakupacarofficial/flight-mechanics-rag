@@ -1,5 +1,6 @@
 venvrag/
 __pycache__/
+.pytest_cache/
 *.db
 *.pkl
 .DS_Store

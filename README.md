@@ -101,6 +101,17 @@ Score distribution is meaningful: term-specific questions score high (Bernoulli 
 
 Grounding is an approximate offline proxy (fraction of the answer's content words, minus question words, that appear in the retrieved context); paraphrasing and synonyms lower it, so ~0.65 reflects a faithful-but-reworded answer rather than verbatim copying. The context handed to the model is the matched chunks plus their immediate neighbours in the same file ([retrieval.py](retrieval.py), `CONTEXT_WINDOW`), which restores continuity broken by splitting on `##` headings; citations still list only the chunks that actually matched. The confidence gate (`RETRIEVAL_MIN_SCORE`) short-circuits both out-of-scope questions before the model is even called; the same constant is the threshold used in this report.
 
+### Tests
+
+Unit tests cover the pure logic — chunk splitting, the confidence gate, neighbour-context expansion (including file-boundary and dedup cases), Foundry port-list resolution, and the grounding/refusal helpers. They need no Foundry service and run in about a second.
+
+```bash
+pip install -r requirements-dev.txt
+pytest
+```
+
+CI runs the same suite on every push and pull request ([.github/workflows/ci.yml](.github/workflows/ci.yml)).
+
 ### Design decisions & limitations
 
 - **Why TF-IDF instead of semantic embeddings?** Foundry Local's catalog contains no embedding model. Rather than adding an external dependency, we used TF-IDF (word-overlap similarity), the same method as Microsoft's reference RAG example. It's fast and fully offline, but sees words rather than meaning, so for multi-topic questions like "stall," the single best chunk can rank second. For this small, well-separated knowledge base the impact is negligible (100% Hit@3).
@@ -200,6 +211,17 @@ Skor dagilimi anlamlidir: terime ozgu sorular yuksek (Bernoulli 0.62, IAS/TAS 0.
 | Kapsam disi → model "bilgi tabanimda yok" dedi | 2/2 |
 
 Grounding yaklasik, cevrimdisi bir olcuttur (cevabin icerik kelimelerinin, soru kelimeleri haric, getirilen baglamda gecen orani); paraphrase ve es anlamli sozcukler bu orani dusurur, dolayisiyla ~0.65 birebir kopyalama degil "sadik ama yeniden ifade edilmis" bir cevabi gosterir. Modele verilen baglam, eslesen chunk'lar + ayni dosyadaki bitisik komsularidir ([retrieval.py](retrieval.py), `CONTEXT_WINDOW`); bu, `##` basligindan bolmenin kopardigi sureklilikligi geri kazandirir. Atiflar yalnizca gercekten eslesen chunk'lari listeler. Guven kapisi (`RETRIEVAL_MIN_SCORE`) iki kapsam disi soruyu model cagrilmadan once kesip atar; bu rapordaki esik de ayni sabittir.
+
+### Testler
+
+Birim testleri saf mantigi kapsar: chunk bolme, guven kapisi, komsu-baglam genisletme (dosya siniri ve tekrar durumlari dahil), Foundry port listesi cozumu ve grounding/reddetme yardimcilari. Foundry servisi gerektirmez, yaklasik bir saniyede calisir.
+
+```bash
+pip install -r requirements-dev.txt
+pytest
+```
+
+CI ayni takimi her push ve pull request'te calistirir ([.github/workflows/ci.yml](.github/workflows/ci.yml)).
 
 ### Tasarim kararlari ve sinirlamalar
 

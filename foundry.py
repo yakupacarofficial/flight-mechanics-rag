@@ -32,10 +32,11 @@ def _candidate_ports():
     """Denenecek portlari oncelik sirasiyla, tekrarsiz dondurur."""
     ports = []
 
-    # 1. Elle override
+    # 1. Elle override: "http://127.0.0.1:9000/v1" ya da duz "9000".
+    #    Son ":" parcasinin basindaki sayiyi al (IP oktetleriyle karismasin).
     env = os.environ.get("FOUNDRY_ENDPOINT") or os.environ.get("FOUNDRY_PORT")
     if env:
-        m = re.search(r"(\d{2,5})", env)
+        m = re.match(r"(\d{2,5})", env.rsplit(":", 1)[-1].strip())
         if m:
             ports.append(int(m.group(1)))
 
