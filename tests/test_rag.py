@@ -74,6 +74,14 @@ def test_low_confidence_returns_no_answer_without_calling_model(idx, captured):
     assert "messages" not in captured  # model cagrilmadi
 
 
+def test_greeting_short_circuits_before_retrieval(idx, captured):
+    vec, matrix, rows = idx
+    ans, chunks = rag.answer_query("selam", "u", "mdl", vec, matrix, rows, [])
+    assert ans != rag.NO_ANSWER and "Merhaba" in ans
+    assert chunks == []
+    assert "messages" not in captured  # model cagrilmadi
+
+
 @pytest.fixture
 def captured_stream(monkeypatch):
     box = {}

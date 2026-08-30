@@ -49,6 +49,47 @@ CONTEXT_WINDOW = 1
 # da bu cumle gomulur; ikisi ayni kalsin diye burada tanimli.
 NO_ANSWER = "I don't have that information in my knowledge base."
 
+# Selamlama / tesekkur / "ne yapabilirsin" gibi mesajlar bilgi sorusu
+# degildir; bunlara NO_ANSWER yerine kisa bir sohbet yaniti doneriz.
+GREETING_REPLY = (
+    "Merhaba! Ucus mekanigi ve aerodinamik sorularini, elimdeki ders "
+    "notlarina dayanarak yanitliyorum. Ornek: \"What is a stall and why "
+    "does it happen?\""
+)
+THANKS_REPLY = "Rica ederim! Baska bir sorun olursa buradayim."
+
+_GREETINGS = {
+    "selam", "selamlar", "merhaba", "mrb", "meraba", "hey", "hi", "hello",
+    "hi there", "hey there", "gunaydin", "gunaydın", "iyi gunler", "iyi günler",
+    "iyi aksamlar", "iyi akşamlar", "iyi geceler", "naber", "naber",
+    "nasilsin", "nasılsın", "selam nasilsin", "selam nasılsın",
+    "merhaba nasilsin", "merhaba nasılsın", "yo",
+}
+_THANKS = {
+    "tesekkurler", "teşekkürler", "tesekkur ederim", "teşekkür ederim",
+    "sag ol", "sağ ol", "sagol", "sağol", "eyvallah", "thanks", "thank you",
+    "thx", "ty",
+}
+_META = {
+    "kimsin", "sen kimsin", "ne yapabilirsin", "ne yaparsin", "ne yaparsın",
+    "ne ise yararsin", "ne işe yararsın", "yardim", "yardım", "help",
+    "who are you", "what can you do", "napiyorsun", "napıyorsun",
+}
+
+
+def smalltalk_reply(question):
+    """
+    Soru bir selamlama/tesekkur/meta mesajiysa kisa bir sohbet yaniti,
+    degilse None doner. Yanlis pozitif olmasin diye TAM eslesme aranir
+    (noktalama ve fazla bosluk temizlenerek).
+    """
+    q = " ".join(question.strip().lower().rstrip("!?. ").split())
+    if q in _GREETINGS or q in _META:
+        return GREETING_REPLY
+    if q in _THANKS:
+        return THANKS_REPLY
+    return None
+
 
 def load_index():
     with open(VECTORIZER_PATH, "rb") as f:

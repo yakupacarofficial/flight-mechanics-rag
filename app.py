@@ -6,7 +6,9 @@ import streamlit as st
 
 from foundry import chat_stream, get_endpoint
 from rag import MAX_HISTORY_MESSAGES
-from retrieval import NO_ANSWER, build_context, get_top_chunks, is_confident
+from retrieval import (
+    NO_ANSWER, build_context, get_top_chunks, is_confident, smalltalk_reply,
+)
 from retrieval import load_index as _load_index
 
 # @st.cache_resource: agir yuklemeyi bir kez yapar, her etkilesimde tekrarlamaz
@@ -81,16 +83,20 @@ if question:
     with st.chat_message("user"):
         st.write(question)
 
-    # Modele gidecek gecmis: mevcut turdan onceki mesajlar (rol + icerik)
+    # Modele gidecek gecmis: onceki turlar, ama selamlama turlari haric
+    # (bilgi tasimaz + Phi-3.5'te dil kaymasina yol acabilir)
     prior = [{"role": m["role"], "content": m["content"]}
-             for m in st.session_state.history]
+             for m in st.session_state.history if not m.get("smalltalk")]
 
-    chunks = get_top_chunks(question, vectorizer, tfidf_matrix, rows, k=3)
-    grounded = is_confident(chunks)
+    reply = smalltalk_reply(question)
+    chunks = [] if reply else get_top_chunks(question, vectorizer, tfidf_matrix, rows, k=3)
 
     with st.chat_message("assistant"):
-        if not grounded:
-            answer = NO_ANSWER  # yeterince alakali chunk yok: modele hic gitme
+        if reply is not None:
+            answer = reply  # selamlama / tesekkur / meta
+            st.write(answer)
+        elif not is_confident(chunks):
+            answer, chunks = NO_ANSWER, []  # alakali chunk yok: modele gitme
             st.write(answer)
         else:
             answer = st.write_stream(
@@ -99,7 +105,7 @@ if question:
             render_sources(chunks)
 
     st.session_state.history += [
-        {"role": "user", "content": question},
-        {"role": "assistant", "content": answer,
-         "sources": chunks if answer != NO_ANSWER else None},
+        {"role": "user", "content": question, "smalltalk": reply is not None},
+        {"role": "assistant", "content": answer, "sources": chunks or None,
+         "smalltalk": reply is not None},
     ]

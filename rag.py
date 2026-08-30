@@ -12,6 +12,7 @@ import time
 from foundry import chat, chat_stream, get_endpoint
 from retrieval import (
     NO_ANSWER, build_context, get_top_chunks, is_confident, load_index,
+    smalltalk_reply,
 )
 
 # Modele tasinan sohbet gecmisinin ust siniri (mesaj sayisi = tur * 2).
@@ -41,8 +42,13 @@ def answer_query(question, base_url, model, vectorizer, tfidf_matrix, rows,
                  history=None, stream=False):
     """
     (cevap, chunks) doner. stream=True ise 'cevap' bir metin-parcasi
-    uretecidir (guven kapisi tetiklenirse tek parcalik).
+    uretecidir (sohbet yaniti / guven kapisi tetiklenirse tek parcalik).
     """
+    # 0. Selamlama / tesekkur / meta: bilgi sorusu degil, kisa yanit
+    reply = smalltalk_reply(question)
+    if reply is not None:
+        return (iter([reply]) if stream else reply), []
+
     # 1. Retrieval: en alakali chunk'lari bul (yalnizca son soruya gore)
     chunks = get_top_chunks(question, vectorizer, tfidf_matrix, rows, k=3)
 
@@ -93,9 +99,13 @@ if __name__ == "__main__":
             parts.append(delta)
         answer = "".join(parts)
         print("\n")
-        print("Kaynaklar:", ", ".join(f"{c['source']}({c['section']})" for c in chunks))
+        if chunks:
+            print("Kaynaklar:", ", ".join(f"{c['source']}({c['section']})" for c in chunks))
         print("-" * 70)
         _log_turn(question, chunks, answer, (time.perf_counter() - t0) * 1000)
-        history += [{"role": "user", "content": question},
-                    {"role": "assistant", "content": answer}]
-        history = history[-MAX_HISTORY_MESSAGES:]
+        # Selamlama/tesekkur turlarini gecmise yazma: takip sorulari icin
+        # bilgi tasimaz, ayrica dil kaymasina yol acabilir.
+        if smalltalk_reply(question) is None:
+            history += [{"role": "user", "content": question},
+                        {"role": "assistant", "content": answer}]
+            history = history[-MAX_HISTORY_MESSAGES:]

@@ -82,9 +82,10 @@ Labelled test set: 12 answerable questions (3 difficulty levels) + 2 deliberatel
 | **Local only** | Privacy; works air-gapped / offline; suitable where cloud LLMs aren't allowed |
 | **TF-IDF + BM25, no embeddings** | Foundry Local ships no embedding model; both are word-overlap, fully offline, zero extra download |
 | **Confidence gate** | If the best match scores below a threshold, answer "I don't know" *without calling the model* |
+| **Greetings & small talk** | "Hi", "thanks", "what can you do?" get a short conversational reply — the "not in my knowledge base" line is reserved for genuine out-of-scope questions |
 | **Neighbour context** | Splitting notes on `##` headings cuts continuity — the model also gets the chunk before/after each match |
 | **Multi-turn + streaming** | Follow-ups ("why does it happen?") use recent history; answers stream token by token |
-| **Tested** | 54 pytest unit tests on the pure logic; CI runs them on every push |
+| **Tested** | 72 pytest unit tests on the pure logic; CI runs them on every push |
 
 **Limitations:** Phi-3.5 Mini favours speed over depth and sometimes appends a redundant
 disclaimer. On this small, well-separated knowledge base pure TF-IDF already hit 100% Hit@3,
@@ -179,9 +180,10 @@ Etiketli test seti: 12 cevaplanabilir soru (3 zorluk seviyesi) + 2 bilerek kapsa
 | **Yalnızca yerel** | Gizlilik; kapalı ağ / çevrimdışı çalışır; bulut LLM'lerin yasak olduğu yerlere uygun |
 | **TF-IDF + BM25, embedding yok** | Foundry Local'de embedding modeli yok; ikisi de sözcük-örtüşmesi, tamamen çevrimdışı, ek indirme yok |
 | **Güven kapısı** | En iyi eşleşme eşiğin altındaysa modeli *hiç çağırmadan* "bilmiyorum" der |
+| **Selamlaşma & sohbet** | "Selam", "teşekkürler", "ne yapabilirsin?" kısa bir sohbet yanıtı alır — "bilgi tabanımda yok" cevabı yalnızca gerçek kapsam-dışı sorulara kalır |
 | **Komşu bağlam** | Notları `##` başlıklarından bölmek sürekliliği koparır — model her eşleşmenin bir önceki/sonraki chunk'ını da alır |
 | **Çok turlu + streaming** | Takip soruları ("peki neden olur?") son mesajları kullanır; cevap token token akar |
-| **Testli** | Saf mantık için 54 pytest testi; CI her push'ta çalıştırır |
+| **Testli** | Saf mantık için 72 pytest testi; CI her push'ta çalıştırır |
 
 **Sınırlar:** Phi-3.5 Mini hızı derinliğe tercih eder, ara sıra gereksiz bir uyarı cümlesi
 ekler. Bu küçük, konuları net ayrık bilgi tabanında saf TF-IDF zaten %100 Hit@3 verdi;

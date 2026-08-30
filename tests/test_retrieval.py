@@ -5,7 +5,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 import retrieval
 from retrieval import (
     RETRIEVAL_MIN_SCORE, bm25_scores, build_context, context_chunks,
-    get_top_chunks, is_confident,
+    get_top_chunks, is_confident, smalltalk_reply,
 )
 
 # Sentetik indeks: 3 chunk a.md, 2 chunk b.md; id'ler dosya sirasinda
@@ -44,6 +44,32 @@ def test_is_confident_true_if_any_chunk_above_threshold():
 
 def test_is_confident_false_if_all_chunks_below_threshold():
     assert is_confident([{"score": 0.05}, {"score": 0.10}]) is False
+
+
+# ---- smalltalk_reply -----------------------------------------------
+
+@pytest.mark.parametrize("msg", [
+    "Selam", "merhaba", "  Merhaba!  ", "hi", "Naber?", "nasılsın",
+    "ne yapabilirsin", "kimsin", "help",
+])
+def test_smalltalk_reply_matches_greetings_and_meta(msg):
+    assert smalltalk_reply(msg) is not None
+
+
+@pytest.mark.parametrize("msg", ["teşekkürler", "sağ ol", "thanks", "Thank you."])
+def test_smalltalk_reply_matches_thanks(msg):
+    reply = smalltalk_reply(msg)
+    assert reply is not None and "Rica" in reply
+
+
+@pytest.mark.parametrize("msg", [
+    "What is a stall and why does it happen?",
+    "merhaba stall nedir",          # gercek soru: selamla bassa da eslesme yok
+    "explain induced drag",
+    "",
+])
+def test_smalltalk_reply_none_for_real_questions(msg):
+    assert smalltalk_reply(msg) is None
 
 
 # ---- context_chunks: komsu genisletme ---------------------------------
