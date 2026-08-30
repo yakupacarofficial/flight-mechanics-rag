@@ -4,8 +4,8 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 
 import retrieval
 from retrieval import (
-    RETRIEVAL_MIN_SCORE, build_context, context_chunks, get_top_chunks,
-    is_confident,
+    RETRIEVAL_MIN_SCORE, bm25_scores, build_context, context_chunks,
+    get_top_chunks, is_confident,
 )
 
 # Sentetik indeks: 3 chunk a.md, 2 chunk b.md; id'ler dosya sirasinda
@@ -37,8 +37,13 @@ def test_is_confident_below_threshold():
     assert is_confident([{"score": RETRIEVAL_MIN_SCORE - 0.01}]) is False
 
 
-def test_is_confident_uses_first_chunk_only():
-    assert is_confident([{"score": 0.05}, {"score": 0.99}]) is False
+def test_is_confident_true_if_any_chunk_above_threshold():
+    # hibrit siralama en iyi TF-IDF chunk'ini 1. siradan kaydirabilir
+    assert is_confident([{"score": 0.05}, {"score": 0.99}]) is True
+
+
+def test_is_confident_false_if_all_chunks_below_threshold():
+    assert is_confident([{"score": 0.05}, {"score": 0.10}]) is False
 
 
 # ---- context_chunks: komsu genisletme ---------------------------------
@@ -107,7 +112,48 @@ def test_get_top_chunks_ranks_relevant_first(tiny_index):
     vec, matrix, rows = tiny_index
     top = get_top_chunks("why does a wing stall at high angle of attack", vec, matrix, rows, k=3)
     assert top[0]["source"] == "c.md"
-    assert top[0]["score"] >= top[1]["score"] >= top[2]["score"]
+
+
+def test_get_top_chunks_score_is_raw_tfidf_not_hybrid(tiny_index):
+    # 'score' alani ham TF-IDF kosinusudur (guven kapisi buna bakar),
+    # hibrit siralama skoru degil -> [0, 1] araliginda
+    vec, matrix, rows = tiny_index
+    top = get_top_chunks("induced drag wingtip vortices", vec, matrix, rows, k=3)
+    assert top[0]["source"] == "b.md"
+    assert 0.0 <= top[0]["score"] <= 1.0
+    assert top[0]["score"] > 0.3  # gercek terim ortusmesi
+
+
+# ---- BM25 + hibrit ------------------------------------------------
+
+def test_bm25_scores_favor_doc_with_query_terms(tiny_index):
+    vec, matrix, rows = tiny_index
+    scores = bm25_scores("wingtip vortices induced drag", rows, vec)
+    assert scores[1] > scores[0] and scores[1] > scores[2]   # b.md kazanir
+    assert scores[1] > 0
+
+
+def test_bm25_scores_all_zero_when_no_term_overlap(tiny_index):
+    vec, matrix, rows = tiny_index
+    scores = bm25_scores("quantum chromodynamics gluon confinement", rows, vec)
+    assert set(scores.values()) == {0.0}
+
+
+def test_pure_tfidf_when_alpha_is_one(tiny_index, monkeypatch):
+    vec, matrix, rows = tiny_index
+    monkeypatch.setattr(retrieval, "HYBRID_ALPHA", 1.0)
+    # BM25 hesaplanmamali: cagrilirsa test patlar
+    monkeypatch.setattr(retrieval, "bm25_scores",
+                        lambda *a, **k: (_ for _ in ()).throw(AssertionError("bm25 cagrildi")))
+    top = get_top_chunks("stall critical angle attack", vec, matrix, rows, k=3)
+    assert top[0]["source"] == "c.md"
+
+
+def test_alpha_zero_ranks_by_bm25(tiny_index, monkeypatch):
+    vec, matrix, rows = tiny_index
+    monkeypatch.setattr(retrieval, "HYBRID_ALPHA", 0.0)
+    top = get_top_chunks("wingtip vortices", vec, matrix, rows, k=3)
+    assert top[0]["source"] == "b.md"
 
 
 def test_get_top_chunks_includes_id_and_k_limit(tiny_index):

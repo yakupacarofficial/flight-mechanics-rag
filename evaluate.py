@@ -128,7 +128,9 @@ def main():
 
     for item in TEST_SET:
         results = get_top_chunks(item["q"], vectorizer, tfidf_matrix, rows, k=3)
-        top_score = results[0]["score"]
+        # Hibrit siralama en iyi TF-IDF chunk'ini 1. siradan kaydirabilir;
+        # guven kapisi gibi burada da maksimum ham skora bakariz.
+        top_score = max(r["score"] for r in results)
         found_sources = [r["source"] for r in results]
         q_short = item["q"][:60] + ("..." if len(item["q"]) > 60 else "")
 

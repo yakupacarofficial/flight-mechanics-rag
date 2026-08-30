@@ -22,7 +22,7 @@ Everything runs on-device via Microsoft Foundry Local, making it suitable for of
 
 ### Architecture
 - **Knowledge base:** 8 Markdown files, ~39 chunks, covering fluid mechanics, airfoils, finite wings, drag, control & stability, flight performance, propellers/drones, and atmosphere.
-- **Retrieval:** TF-IDF vectorization + cosine similarity (scikit-learn). Chosen because Foundry Local's catalog has no embedding model; TF-IDF is the same approach used in Microsoft's reference RAG blog and works well for small knowledge bases, fully offline, no extra model download.
+- **Retrieval:** two-stage. A TF-IDF cosine pass ([scikit-learn](https://scikit-learn.org/)) picks a candidate pool, then the pool is re-ranked by a blend of TF-IDF and a hand-rolled BM25 (`HYBRID_ALPHA`). Chosen because Foundry Local's catalog has no embedding model; both signals are word-overlap based, fully offline, no extra model download. The confidence gate always uses the raw TF-IDF score.
 - **Storage:** SQLite for chunk text/metadata; pickled TF-IDF vectorizer and matrix.
 - **Generation:** Phi-3.5 Mini via Foundry Local's OpenAI-compatible local API.
 
@@ -32,7 +32,7 @@ Everything runs on-device via Microsoft Foundry Local, making it suitable for of
 |-----------|--------|-----|
 | Model runtime | Microsoft Foundry Local | On-device inference, OpenAI-compatible API |
 | Language model | Phi-3.5 Mini | Small, fast, good quality; runs on Apple Silicon GPU |
-| Retrieval | scikit-learn TF-IDF | No embedding model needed; ideal for small corpora |
+| Retrieval | scikit-learn TF-IDF + BM25 re-rank | No embedding model needed; ideal for small corpora |
 | Storage | SQLite | Serverless, single-file, built into Python |
 | Web UI | Streamlit | Pure-Python web interface |
 
@@ -113,7 +113,7 @@ CI runs the same suite on every push and pull request ([.github/workflows/ci.yml
 
 ### Design decisions & limitations
 
-- **Why TF-IDF instead of semantic embeddings?** Foundry Local's catalog contains no embedding model. Rather than adding an external dependency, we used TF-IDF (word-overlap similarity), the same method as Microsoft's reference RAG example. It's fast and fully offline, but sees words rather than meaning, so for multi-topic questions like "stall," the single best chunk can rank second. For this small, well-separated knowledge base the impact is negligible (100% Hit@3).
+- **Why TF-IDF + BM25 instead of semantic embeddings?** Foundry Local's catalog contains no embedding model. Rather than adding an external dependency, retrieval uses word-overlap signals only: TF-IDF cosine for the candidate pool, then a BM25 re-rank (term-frequency saturation + document-length normalisation) to steady the ordering of near-tied supporting chunks. Both are fast and fully offline. On this small, well-separated knowledge base retrieval was already at 100% Hit@3 with pure TF-IDF, so BM25 is insurance for questions outside the test set rather than a headline gain; set `HYBRID_ALPHA = 1.0` in [retrieval.py](retrieval.py) for pure TF-IDF.
 - **Why local?** Privacy, offline capability, and suitability for air-gapped or defense environments where cloud LLMs cannot be used.
 - **Model size trade-off:** Phi-3.5 Mini prioritizes speed over depth; occasionally it appends a redundant disclaimer. Larger models would improve nuance at the cost of latency.
 
@@ -133,7 +133,7 @@ Her sey Microsoft Foundry Local ile cihaz uzerinde calisir; cevrimdisi, kapali a
 
 ### Mimari
 - **Bilgi tabani:** 8 Markdown dosyasi, ~39 parca; akiskanlar mekanigi, kanat profilleri, sonlu kanat, surukleme, kontrol ve kararlilik, ucus performansi, pervaneler/dronlar ve atmosfer konularini kapsar.
-- **Retrieval:** TF-IDF vektorlestirme + kosinus benzerligi (scikit-learn). Foundry Local kataloğunda embedding modeli bulunmadigi icin tercih edildi; TF-IDF, Microsoft'un referans RAG blog yazisinin da kullandigi yontemdir ve kucuk bilgi tabanlarinda iyi calisir, tamamen cevrimdisi.
+- **Retrieval:** iki asamali. TF-IDF kosinus ([scikit-learn](https://scikit-learn.org/)) bir aday havuzu secer, sonra havuz TF-IDF ile elle yazilmis bir BM25'in karisimiyla (`HYBRID_ALPHA`) yeniden siralanir. Foundry Local kataloğunda embedding modeli bulunmadigi icin tercih edildi; iki sinyal de sozcuk-ortusmesine dayanir, tamamen cevrimdisi, ek model indirmesi yok. Guven kapisi her zaman ham TF-IDF skorunu kullanir.
 - **Depolama:** Parca metni ve bilgileri icin SQLite; TF-IDF vektorlestirici ve matris icin pickle dosyalari.
 - **Uretim:** Foundry Local'in OpenAI-uyumlu yerel API'si uzerinden Phi-3.5 Mini.
 
@@ -143,7 +143,7 @@ Her sey Microsoft Foundry Local ile cihaz uzerinde calisir; cevrimdisi, kapali a
 |---------|-------|-------|
 | Model calisma ortami | Microsoft Foundry Local | Cihaz uzeri cikarim, OpenAI-uyumlu API |
 | Dil modeli | Phi-3.5 Mini | Kucuk, hizli, kaliteli; Apple Silicon GPU'da calisir |
-| Retrieval | scikit-learn TF-IDF | Embedding modeli gerektirmez; kucuk veri icin ideal |
+| Retrieval | scikit-learn TF-IDF + BM25 yeniden siralama | Embedding modeli gerektirmez; kucuk veri icin ideal |
 | Depolama | SQLite | Sunucusuz, tek dosya, Python'da yerlesik |
 | Web arayuzu | Streamlit | Saf Python web arayuzu |
 
@@ -223,7 +223,7 @@ CI ayni takimi her push ve pull request'te calistirir ([.github/workflows/ci.yml
 
 ### Tasarim kararlari ve sinirlamalar
 
-- **Neden semantik embedding yerine TF-IDF?** Foundry Local kataloğunda embedding modeli yok. Disaridan bagimlilik eklemek yerine, Microsoft'un referans RAG orneğiyle ayni yontem olan TF-IDF (sozcuk-ortusme benzerligi) kullanildi. Hizli ve tamamen cevrimdisidir, ama anlami degil kelimeleri gorur, bu yuzden "stall" gibi cok-konulu sorularda en isabetli parca ikinci siraya dusebilir. Bu kucuk ve konulari net ayrik bilgi tabaninda etki ihmal edilebilir (%100 Hit@3).
+- **Neden semantik embedding yerine TF-IDF + BM25?** Foundry Local kataloğunda embedding modeli yok. Disaridan bagimlilik eklemek yerine retrieval yalnizca sozcuk-ortusme sinyalleri kullanir: aday havuzu icin TF-IDF kosinus, ardindan berabere yakin destek chunk'larinin siralamasini oturtmak icin BM25 yeniden siralama (terim-frekansi doygunlugu + belge-uzunlugu normalizasyonu). Ikisi de hizli ve tamamen cevrimdisi. Bu kucuk, konulari net ayrik bilgi tabaninda saf TF-IDF zaten %100 Hit@3 veriyordu; BM25 headline bir kazanim degil, test-seti disi sorular icin sigortadir. Saf TF-IDF icin [retrieval.py](retrieval.py)'de `HYBRID_ALPHA = 1.0` yapin.
 - **Neden yerel?** Gizlilik, cevrimdisi calisabilme ve bulut LLM'lerin kullanilamadigi kapali ag/savunma ortamlarina uygunluk.
 - **Model boyutu odunlesimi:** Phi-3.5 Mini hizi derinlige tercih eder; ara sira gereksiz bir uyari cumlesi ekleyebilir. Daha buyuk modeller nuansi artirir ama gecikme pahasina.
 
