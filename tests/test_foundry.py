@@ -1,4 +1,6 @@
-"""foundry: port aday listesi (override + CLI + fallback) ve model secimi."""
+"""foundry: port aday listesi, model secimi, servis kesif + auto-start."""
+import pytest
+
 import foundry
 from foundry import _candidate_ports, _pick_model
 
@@ -68,3 +70,47 @@ def test_pick_model_falls_back_to_first():
 
 def test_pick_model_empty_returns_alias():
     assert _pick_model({"data": []}) == "phi-3.5-mini"
+
+
+# ---- get_endpoint: kesif + auto-start ------------------------------
+
+def test_get_endpoint_returns_first_live_service(monkeypatch):
+    monkeypatch.setattr(foundry, "_service_up",
+                        lambda timeout=2: ("http://127.0.0.1:5273/v1", "phi-x"))
+    monkeypatch.setattr(foundry, "_start_service",
+                        lambda: pytest.fail("servis zaten ayakta, start cagrilmamali"))
+    assert foundry.get_endpoint() == ("http://127.0.0.1:5273/v1", "phi-x")
+
+
+def test_get_endpoint_auto_starts_when_nothing_responds(monkeypatch):
+    monkeypatch.delenv("FOUNDRY_NO_AUTOSTART", raising=False)
+    state = {"up": False}
+    started = []
+    monkeypatch.setattr(foundry, "_service_up",
+                        lambda timeout=2: ("http://127.0.0.1:9/v1", "m") if state["up"] else None)
+
+    def fake_start():
+        started.append(1)
+        state["up"] = True
+        return True
+
+    monkeypatch.setattr(foundry, "_start_service", fake_start)
+    assert foundry.get_endpoint(wait=3) == ("http://127.0.0.1:9/v1", "m")
+    assert started == [1]
+
+
+def test_get_endpoint_raises_when_autostart_disabled(monkeypatch):
+    started = []
+    monkeypatch.setattr(foundry, "_service_up", lambda timeout=2: None)
+    monkeypatch.setattr(foundry, "_start_service", lambda: started.append(1) or True)
+    with pytest.raises(RuntimeError):
+        foundry.get_endpoint(auto_start=False, wait=1)
+    assert started == []
+
+
+def test_get_endpoint_raises_when_autostart_fails(monkeypatch):
+    monkeypatch.delenv("FOUNDRY_NO_AUTOSTART", raising=False)
+    monkeypatch.setattr(foundry, "_service_up", lambda timeout=2: None)
+    monkeypatch.setattr(foundry, "_start_service", lambda: False)  # CLI yok
+    with pytest.raises(RuntimeError):
+        foundry.get_endpoint(wait=1)

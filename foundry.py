@@ -8,6 +8,9 @@ portu su sirayla bulur:
   3. Bilinen portlar (servis/CLI yoksa son care)
 
 Bulunan her aday, /v1/models ile dogrulanir; ilk cevap veren kazanir.
+Hicbiri cevap vermezse ve foundry CLI'si varsa servis otomatik
+baslatilir ('foundry service start') ve ayaga kalkmasi beklenir.
+Otomatik baslatmayi kapatmak icin: FOUNDRY_NO_AUTOSTART=1
 
 Kullanim:
     from foundry import get_endpoint
@@ -18,6 +21,7 @@ import os
 import re
 import shutil
 import subprocess
+import time
 
 import requests
 
@@ -70,24 +74,56 @@ def _pick_model(models_json):
     return "phi-3.5-mini"  # servis istek gelince yukler
 
 
-def get_endpoint(timeout=2):
-    """
-    Calisan Foundry servisinin OpenAI-uyumlu taban URL'sini ve chat
-    modelini dondurur: (base_url, model_id).
-    Hicbir aday cevap vermezse RuntimeError firlatir.
-    """
-    last_err = None
+def _service_up(timeout=2):
+    """Aday portlardan ilk cevap verenin (base_url, model_id)'si, yoksa None."""
     for port in _candidate_ports():
         url = f"http://127.0.0.1:{port}/v1"
         try:
             resp = requests.get(f"{url}/models", timeout=timeout)
             resp.raise_for_status()
             return url, _pick_model(resp.json())
-        except Exception as e:  # noqa: BLE001 - bir sonraki portu dene
-            last_err = e
+        except Exception:  # noqa: BLE001 - bir sonraki portu dene
+            continue
+    return None
+
+
+def _start_service():
+    """'foundry service start' calistirir. CLI yoksa ya da hata olursa False."""
+    if not shutil.which("foundry"):
+        return False
+    try:
+        subprocess.run(["foundry", "service", "start"],
+                       capture_output=True, text=True, timeout=30, check=False)
+        return True
+    except Exception:
+        return False
+
+
+def get_endpoint(timeout=2, auto_start=True, wait=20):
+    """
+    Calisan Foundry servisinin OpenAI-uyumlu taban URL'sini ve chat
+    modelini dondurur: (base_url, model_id).
+
+    Hicbir aday cevap vermezse ve auto_start ise (FOUNDRY_NO_AUTOSTART
+    ayarli degilse) servisi baslatip `wait` saniye kadar bekler.
+    Yine de bulamazsa RuntimeError firlatir.
+    """
+    hit = _service_up(timeout)
+    if hit:
+        return hit
+
+    if (auto_start and not os.environ.get("FOUNDRY_NO_AUTOSTART")
+            and _start_service()):
+        deadline = time.monotonic() + wait
+        while time.monotonic() < deadline:
+            hit = _service_up(timeout)
+            if hit:
+                return hit
+            time.sleep(1)
+
     raise RuntimeError(
-        "Foundry servisi bulunamadi. Terminalde 'foundry service start' "
-        f"calistigindan emin olun. (son hata: {last_err})"
+        "Foundry servisi bulunamadi ve baslatilamadi. Terminalde "
+        "'foundry service start' calistirmayi deneyin."
     )
 
 
