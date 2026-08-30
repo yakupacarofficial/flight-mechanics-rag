@@ -70,3 +70,31 @@ def test_low_confidence_returns_no_answer_without_calling_model(idx, captured):
     )
     assert ans == rag.NO_ANSWER
     assert "messages" not in captured  # model cagrilmadi
+
+
+@pytest.fixture
+def captured_stream(monkeypatch):
+    box = {}
+
+    def fake_stream(base_url, model, messages, **kw):
+        box["messages"] = messages
+        return iter(["FA", "KE"])
+
+    monkeypatch.setattr(rag, "chat_stream", fake_stream)
+    return box
+
+
+def test_stream_true_returns_generator(idx, captured_stream):
+    vec, matrix, rows = idx
+    gen, chunks = rag.answer_query("stall critical angle attack", "u", "mdl",
+                                   vec, matrix, rows, stream=True)
+    assert "".join(gen) == "FAKE"
+    assert captured_stream["messages"][-1]["content"] == "stall critical angle attack"
+
+
+def test_stream_true_low_confidence_yields_no_answer_once(idx, captured_stream):
+    vec, matrix, rows = idx
+    gen, chunks = rag.answer_query("unrelated quasar astrophysics question",
+                                   "u", "mdl", vec, matrix, rows, stream=True)
+    assert list(gen) == [rag.NO_ANSWER]
+    assert "messages" not in captured_stream  # model cagrilmadi

@@ -44,7 +44,7 @@ ingest.py         Build the index: split docs/*.md on ## headings, fit TF-IDF,
 retrieval.py      Shared retrieval: index loading, TF-IDF + BM25 re-rank,
                   confidence gate (RETRIEVAL_MIN_SCORE), neighbour-context builder
 foundry.py        Foundry Local connection: port discovery, service auto-start,
-                  chat() helper (raw requests, no request-body-timeout)
+                  chat() / chat_stream() helpers (raw requests, no body-timeout)
 rag.py            Command-line RAG loop + answer_query() (used by evaluate.py)
 app.py            Streamlit multi-turn web UI with per-answer source panels
 retrieve.py       Retrieval-only diagnostic (prints top chunks, no model)
@@ -86,7 +86,7 @@ streamlit run app.py         # opens http://localhost:8501
 
 The model service is started automatically if it isn't already running; you can also start it yourself with `foundry service start`.
 
-Both interfaces are multi-turn: the last few messages are carried into the prompt so follow-ups like "why does it happen?" resolve against the previous answer. Retrieval still runs on the current question only. The web interface additionally shows an expandable panel for each retrieved chunk, so you can read the exact passage an answer was drawn from.
+Both interfaces are multi-turn and stream the answer token by token as the model generates it. The last few messages are carried into the prompt so follow-ups like "why does it happen?" resolve against the previous answer; retrieval still runs on the current question only. The web interface additionally shows an expandable panel for each retrieved chunk, so you can read the exact passage an answer was drawn from.
 
 Note on ports: Foundry Local assigns a random port on each restart. Port discovery is automatic ([foundry.py](foundry.py)): it reads the current port from `foundry service status`, falling back to a list of known ports. If the service isn't running at all, it is started (`foundry service start`) and waited for. To force a specific endpoint, set `FOUNDRY_ENDPOINT=http://127.0.0.1:PORT` (or `FOUNDRY_PORT=PORT`); to disable auto-start, set `FOUNDRY_NO_AUTOSTART=1`.
 
@@ -173,7 +173,7 @@ ingest.py         Indeksi kur: docs/*.md'yi ## basliklarindan bol, TF-IDF egit,
 retrieval.py      Paylasilan retrieval: indeks yukleme, TF-IDF + BM25 yeniden
                   siralama, guven kapisi (RETRIEVAL_MIN_SCORE), komsu-baglam
 foundry.py        Foundry Local baglantisi: port kesfi, servis auto-start,
-                  chat() yardimcisi (ham requests, govde-timeout yok)
+                  chat() / chat_stream() yardimcilari (ham requests, timeout yok)
 rag.py            Komut satiri RAG dongusu + answer_query() (evaluate.py kullanir)
 app.py            Streamlit cok turlu web arayuzu, cevap basina kaynak panelleri
 retrieve.py       Yalniz retrieval tanisi (en iyi chunk'lari yazar, model yok)
@@ -215,7 +215,7 @@ streamlit run app.py         # http://localhost:8501 acilir
 
 Model servisi calismiyorsa otomatik baslatilir; dilerseniz kendiniz de `foundry service start` ile baslatabilirsiniz.
 
-Her iki arayuz de cok turludur: son birkac mesaj prompt'a tasinir, boylece "peki neden olur?" gibi takip sorulari onceki cevaba gore cozulur. Retrieval yine yalnizca guncel soruya gore calisir. Web arayuzu ayrica getirilen her chunk icin acilir bir panel gosterir; boylece cevabin dayandigi tam pasaji okuyabilirsiniz.
+Her iki arayuz de cok turludur ve cevabi model urettikce token token akitir. Son birkac mesaj prompt'a tasinir, boylece "peki neden olur?" gibi takip sorulari onceki cevaba gore cozulur; retrieval yine yalnizca guncel soruya gore calisir. Web arayuzu ayrica getirilen her chunk icin acilir bir panel gosterir; boylece cevabin dayandigi tam pasaji okuyabilirsiniz.
 
 Port notu: Foundry Local her yeniden baslatmada rastgele bir port atar. Port bulma otomatiktir ([foundry.py](foundry.py)): guncel port `foundry service status` ciktisindan okunur, bulunamazsa bilinen portlar denenir. Servis hic calismiyorsa baslatilir (`foundry service start`) ve ayaga kalkmasi beklenir. Belirli bir adresi zorlamak icin `FOUNDRY_ENDPOINT=http://127.0.0.1:PORT` (veya `FOUNDRY_PORT=PORT`); otomatik baslatmayi kapatmak icin `FOUNDRY_NO_AUTOSTART=1` ayarlayin.
 

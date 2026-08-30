@@ -4,7 +4,7 @@ Calistirmak icin: streamlit run app.py
 """
 import streamlit as st
 
-from foundry import chat, get_endpoint
+from foundry import chat_stream, get_endpoint
 from rag import MAX_HISTORY_MESSAGES
 from retrieval import NO_ANSWER, build_context, get_top_chunks, is_confident
 from retrieval import load_index as _load_index
@@ -13,8 +13,8 @@ from retrieval import load_index as _load_index
 load_index = st.cache_resource(_load_index)
 
 
-def answer_query(question, base_url, model, chunks, rows, history=None):
-    # Baglam: eslesen chunk'lar + ayni dosyadaki komsulari
+def answer_stream(question, base_url, model, chunks, rows, history=None):
+    """Cevabi parca parca uretir (st.write_stream ile canli yazilir)."""
     context = build_context(chunks, rows)
     system_prompt = (
         "You are a flight-mechanics teaching assistant. Answer the user's "
@@ -26,7 +26,7 @@ def answer_query(question, base_url, model, chunks, rows, history=None):
     messages = [{"role": "system", "content": system_prompt}]
     messages += (history or [])[-MAX_HISTORY_MESSAGES:]
     messages.append({"role": "user", "content": question})
-    return chat(base_url, model, messages)
+    return chat_stream(base_url, model, messages)
 
 
 def render_sources(chunks):
@@ -86,15 +86,16 @@ if question:
              for m in st.session_state.history]
 
     chunks = get_top_chunks(question, vectorizer, tfidf_matrix, rows, k=3)
-    if not is_confident(chunks):
-        answer = NO_ANSWER  # yeterince alakali chunk yok: modele hic gitme
-    else:
-        with st.spinner("Retrieval + model calisiyor..."):
-            answer = answer_query(question, url, model, chunks, rows, prior)
+    grounded = is_confident(chunks)
 
     with st.chat_message("assistant"):
-        st.write(answer)
-        if answer != NO_ANSWER:
+        if not grounded:
+            answer = NO_ANSWER  # yeterince alakali chunk yok: modele hic gitme
+            st.write(answer)
+        else:
+            answer = st.write_stream(
+                answer_stream(question, url, model, chunks, rows, prior)
+            )
             render_sources(chunks)
 
     st.session_state.history += [

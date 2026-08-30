@@ -72,6 +72,27 @@ def test_pick_model_empty_returns_alias():
     assert _pick_model({"data": []}) == "phi-3.5-mini"
 
 
+# ---- _iter_sse_deltas: token akisi ayristirma -----------------------
+
+def test_iter_sse_deltas_extracts_content_and_stops_at_done():
+    lines = [
+        'data: {"choices":[{"delta":{"role":"assistant"}}]}',
+        'data: {"choices":[{"delta":{"content":"Hel"}}]}',
+        '',
+        'garbage without data prefix',
+        'data: {"choices":[{"delta":{"content":"lo"}}]}',
+        'data: {"choices":[{"delta":{}}]}',
+        'data: [DONE]',
+        'data: {"choices":[{"delta":{"content":"AFTER-DONE"}}]}',
+    ]
+    assert list(foundry._iter_sse_deltas(lines)) == ["Hel", "lo"]
+
+
+def test_iter_sse_deltas_skips_malformed_payloads():
+    lines = ['data: {oops', 'data: {"choices":[]}', 'data: {"x":1}']
+    assert list(foundry._iter_sse_deltas(lines)) == []
+
+
 # ---- get_endpoint: kesif + auto-start ------------------------------
 
 def test_get_endpoint_returns_first_live_service(monkeypatch):

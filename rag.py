@@ -5,7 +5,7 @@ guven esiginin altindaysa model hic cagrilmaz, dogrudan NO_ANSWER doner.
 Onceki turlar baglama katilir (takip sorulari icin); retrieval yine
 yalnizca son soruya gore yapilir.
 """
-from foundry import chat, get_endpoint
+from foundry import chat, chat_stream, get_endpoint
 from retrieval import (
     NO_ANSWER, build_context, get_top_chunks, is_confident, load_index,
 )
@@ -15,13 +15,17 @@ MAX_HISTORY_MESSAGES = 6
 
 
 def answer_query(question, base_url, model, vectorizer, tfidf_matrix, rows,
-                 history=None):
+                 history=None, stream=False):
+    """
+    (cevap, chunks) doner. stream=True ise 'cevap' bir metin-parcasi
+    uretecidir (guven kapisi tetiklenirse tek parcalik).
+    """
     # 1. Retrieval: en alakali chunk'lari bul (yalnizca son soruya gore)
     chunks = get_top_chunks(question, vectorizer, tfidf_matrix, rows, k=3)
 
     # 2. Guven kontrolu: yeterince alakali chunk yoksa modele hic gitme
     if not is_confident(chunks):
-        return NO_ANSWER, chunks
+        return (iter([NO_ANSWER]) if stream else NO_ANSWER), chunks
 
     # 3. Baglami olustur (eslesen chunk'lar + ayni dosyadaki komsulari)
     context = build_context(chunks, rows)
@@ -39,7 +43,8 @@ def answer_query(question, base_url, model, vectorizer, tfidf_matrix, rows,
     messages = [{"role": "system", "content": system_prompt}]
     messages += (history or [])[-MAX_HISTORY_MESSAGES:]
     messages.append({"role": "user", "content": question})
-    return chat(base_url, model, messages), chunks
+    send = chat_stream if stream else chat
+    return send(base_url, model, messages), chunks
 
 
 if __name__ == "__main__":
@@ -53,10 +58,17 @@ if __name__ == "__main__":
         question = input("Soru: ").strip()
         if not question:
             break
-        answer, chunks = answer_query(
-            question, url, model, vectorizer, tfidf_matrix, rows, history
+        stream, chunks = answer_query(
+            question, url, model, vectorizer, tfidf_matrix, rows, history,
+            stream=True,
         )
-        print(f"\nCevap:\n{answer}\n")
+        print("\nCevap:")
+        parts = []
+        for delta in stream:
+            print(delta, end="", flush=True)
+            parts.append(delta)
+        answer = "".join(parts)
+        print("\n")
         print("Kaynaklar:", ", ".join(f"{c['source']}({c['section']})" for c in chunks))
         print("-" * 70)
         history += [{"role": "user", "content": question},

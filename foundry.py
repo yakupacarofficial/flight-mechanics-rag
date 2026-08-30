@@ -17,6 +17,7 @@ Kullanim:
     base_url, model = get_endpoint()
     # -> ("http://127.0.0.1:55845/v1", "Phi-3.5-mini-instruct-generic-gpu:2")
 """
+import json
 import os
 import re
 import shutil
@@ -149,3 +150,38 @@ def chat(base_url, model, messages, temperature=0.2, max_tokens=400, timeout=120
     if resp.status_code != 200:
         raise RuntimeError(f"Foundry {resp.status_code}: {resp.text[:500]}")
     return resp.json()["choices"][0]["message"]["content"]
+
+
+def _iter_sse_deltas(lines):
+    """OpenAI-uyumlu SSE satirlarindan bos olmayan icerik parcalarini uretir."""
+    for line in lines:
+        if not line or not line.startswith("data:"):
+            continue
+        data = line[5:].strip()
+        if data == "[DONE]":
+            return
+        try:
+            delta = json.loads(data)["choices"][0]["delta"].get("content") or ""
+        except (json.JSONDecodeError, KeyError, IndexError):
+            continue
+        if delta:
+            yield delta
+
+
+def chat_stream(base_url, model, messages, temperature=0.2, max_tokens=400,
+                timeout=120):
+    """chat() ile ayni ama cevabi parca parca (token akisi) uretir."""
+    payload = {
+        "model": model,
+        "messages": messages,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+        "stream": True,
+    }
+    sess = requests.Session()
+    sess.trust_env = False
+    with sess.post(f"{base_url}/chat/completions", json=payload,
+                   timeout=timeout, stream=True) as resp:
+        if resp.status_code != 200:
+            raise RuntimeError(f"Foundry {resp.status_code}: {resp.text[:500]}")
+        yield from _iter_sse_deltas(resp.iter_lines(decode_unicode=True))
