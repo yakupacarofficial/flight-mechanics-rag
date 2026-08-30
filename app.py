@@ -1,10 +1,11 @@
 """
-Streamlit web arayuzu: Flight Mechanics RAG asistani.
+Streamlit web arayuzu: Flight Mechanics RAG asistani (cok turlu sohbet).
 Calistirmak icin: streamlit run app.py
 """
 import streamlit as st
 
 from foundry import chat, get_endpoint
+from rag import MAX_HISTORY_MESSAGES
 from retrieval import NO_ANSWER, build_context, get_top_chunks, is_confident
 from retrieval import load_index as _load_index
 
@@ -12,7 +13,7 @@ from retrieval import load_index as _load_index
 load_index = st.cache_resource(_load_index)
 
 
-def answer_query(question, base_url, model, chunks, rows):
+def answer_query(question, base_url, model, chunks, rows, history=None):
     # Baglam: eslesen chunk'lar + ayni dosyadaki komsulari
     context = build_context(chunks, rows)
     system_prompt = (
@@ -22,10 +23,19 @@ def answer_query(question, base_url, model, chunks, rows):
         "relevant. Be concise.\n\n"
         f"CONTEXT:\n{context}"
     )
-    return chat(base_url, model, [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": question},
-    ])
+    messages = [{"role": "system", "content": system_prompt}]
+    messages += (history or [])[-MAX_HISTORY_MESSAGES:]
+    messages.append({"role": "user", "content": question})
+    return chat(base_url, model, messages)
+
+
+def render_sources(chunks):
+    with st.expander("Kaynaklar — cevabin buradan gelip gelmedigini kontrol et"):
+        for c in chunks:
+            st.markdown(f"**{c['source']}** — {c['section']}  (skor: {c['score']:.3f})")
+            # chunk metni '## Baslik' satiriyla basliyor; basligi atla
+            body = c["text"].split("\n", 1)[1] if "\n" in c["text"] else c["text"]
+            st.caption(body.strip())
 
 
 # ---------- ARAYUZ ----------
@@ -44,9 +54,11 @@ except RuntimeError as e:
 
 vectorizer, tfidf_matrix, rows = load_index()
 
-st.success(f"Bagli: {model}  •  {len(rows)} chunk yuklu")
+col_info, col_clear = st.columns([4, 1])
+col_info.success(f"Bagli: {model}  •  {len(rows)} chunk yuklu")
+if col_clear.button("Sohbeti temizle"):
+    st.session_state.history = []
 
-# Ornek sorular (tiklaninca kutuya yazilir)
 with st.expander("Ornek sorular"):
     st.markdown(
         "- What is a stall and why does it happen?\n"
@@ -55,25 +67,38 @@ with st.expander("Ornek sorular"):
         "- What is the best airfoil for a supersonic jet? (kapsam disi)"
     )
 
-question = st.text_input("Sorunuzu yazin:", placeholder="What is a stall and why does it happen?")
+st.session_state.setdefault("history", [])
 
+# Onceki turlari goster (kaynaklariyla)
+for msg in st.session_state.history:
+    with st.chat_message(msg["role"]):
+        st.write(msg["content"])
+        if msg.get("sources"):
+            render_sources(msg["sources"])
+
+question = st.chat_input("Sorunuzu yazin")
 if question:
+    with st.chat_message("user"):
+        st.write(question)
+
+    # Modele gidecek gecmis: mevcut turdan onceki mesajlar (rol + icerik)
+    prior = [{"role": m["role"], "content": m["content"]}
+             for m in st.session_state.history]
+
     chunks = get_top_chunks(question, vectorizer, tfidf_matrix, rows, k=3)
     if not is_confident(chunks):
-        # Yeterince alakali chunk yok: modele hic gitme
-        answer = NO_ANSWER
+        answer = NO_ANSWER  # yeterince alakali chunk yok: modele hic gitme
     else:
         with st.spinner("Retrieval + model calisiyor..."):
-            answer = answer_query(question, url, model, chunks, rows)
+            answer = answer_query(question, url, model, chunks, rows, prior)
 
-    st.subheader("Cevap")
-    st.write(answer)
+    with st.chat_message("assistant"):
+        st.write(answer)
+        if answer != NO_ANSWER:
+            render_sources(chunks)
 
-    st.subheader("Kaynaklar")
-    st.caption("Eslesen bolumler. Ac ve cevabin buradan gelip gelmedigini kontrol et.")
-    for c in chunks:
-        with st.expander(f"{c['source']} — {c['section']}  (skor: {c['score']:.3f})"):
-            # chunk metni '## Baslik' satiriyla basliyor; baslik zaten
-            # expander etiketinde var, tekrar gostermeyelim.
-            body = c["text"].split("\n", 1)[1] if "\n" in c["text"] else c["text"]
-            st.markdown(body.strip())
+    st.session_state.history += [
+        {"role": "user", "content": question},
+        {"role": "assistant", "content": answer,
+         "sources": chunks if answer != NO_ANSWER else None},
+    ]

@@ -68,7 +68,7 @@ streamlit run app.py         # opens http://localhost:8501
 
 The model service is started automatically if it isn't already running; you can also start it yourself with `foundry service start`.
 
-The web interface shows the answer plus an expandable panel for each retrieved chunk, so you can read the exact passage the answer was drawn from.
+Both interfaces are multi-turn: the last few messages are carried into the prompt so follow-ups like "why does it happen?" resolve against the previous answer. Retrieval still runs on the current question only. The web interface additionally shows an expandable panel for each retrieved chunk, so you can read the exact passage an answer was drawn from.
 
 Note on ports: Foundry Local assigns a random port on each restart. Port discovery is automatic ([foundry.py](foundry.py)): it reads the current port from `foundry service status`, falling back to a list of known ports. If the service isn't running at all, it is started (`foundry service start`) and waited for. To force a specific endpoint, set `FOUNDRY_ENDPOINT=http://127.0.0.1:PORT` (or `FOUNDRY_PORT=PORT`); to disable auto-start, set `FOUNDRY_NO_AUTOSTART=1`.
 
@@ -178,7 +178,7 @@ streamlit run app.py         # http://localhost:8501 acilir
 
 Model servisi calismiyorsa otomatik baslatilir; dilerseniz kendiniz de `foundry service start` ile baslatabilirsiniz.
 
-Web arayuzu, cevabin yaninda getirilen her chunk icin acilir bir panel gosterir; boylece cevabin dayandigi tam pasaji okuyabilirsiniz.
+Her iki arayuz de cok turludur: son birkac mesaj prompt'a tasinir, boylece "peki neden olur?" gibi takip sorulari onceki cevaba gore cozulur. Retrieval yine yalnizca guncel soruya gore calisir. Web arayuzu ayrica getirilen her chunk icin acilir bir panel gosterir; boylece cevabin dayandigi tam pasaji okuyabilirsiniz.
 
 Port notu: Foundry Local her yeniden baslatmada rastgele bir port atar. Port bulma otomatiktir ([foundry.py](foundry.py)): guncel port `foundry service status` ciktisindan okunur, bulunamazsa bilinen portlar denenir. Servis hic calismiyorsa baslatilir (`foundry service start`) ve ayaga kalkmasi beklenir. Belirli bir adresi zorlamak icin `FOUNDRY_ENDPOINT=http://127.0.0.1:PORT` (veya `FOUNDRY_PORT=PORT`); otomatik baslatmayi kapatmak icin `FOUNDRY_NO_AUTOSTART=1` ayarlayin.
 
