@@ -1,5 +1,7 @@
 # Flight Mechanics RAG
 
+[![CI](https://github.com/yakupacarofficial/flight-mechanics-rag/actions/workflows/ci.yml/badge.svg)](https://github.com/yakupacarofficial/flight-mechanics-rag/actions/workflows/ci.yml)
+
 A **fully local, offline** assistant that answers flight-mechanics and aerodynamics
 questions from a personal set of notes. Powered by Microsoft Foundry Local + Phi-3.5 Mini.
 No cloud, no API keys, no data leaves the machine.
