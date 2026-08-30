@@ -37,6 +37,24 @@ Everything runs on-device via Microsoft Foundry Local, making it suitable for of
 | Web UI | Streamlit | Pure-Python web interface |
 
 ### Project structure
+
+```
+ingest.py         Build the index: split docs/*.md on ## headings, fit TF-IDF,
+                  write knowledge.db + vectorizer.pkl + tfidf_matrix.pkl
+retrieval.py      Shared retrieval: index loading, TF-IDF + BM25 re-rank,
+                  confidence gate (RETRIEVAL_MIN_SCORE), neighbour-context builder
+foundry.py        Foundry Local connection: port discovery, service auto-start,
+                  chat() helper (raw requests, no request-body-timeout)
+rag.py            Command-line RAG loop + answer_query() (used by evaluate.py)
+app.py            Streamlit multi-turn web UI with per-answer source panels
+retrieve.py       Retrieval-only diagnostic (prints top chunks, no model)
+evaluate.py       Labelled evaluation: retrieval metrics, and --generate for
+                  end-to-end grounding / refusal checks
+docs/             Knowledge base: 8 Markdown files (~39 chunks)
+tests/            pytest suite (pure logic, no Foundry service needed)
+.github/workflows CI: runs pytest on every push and PR
+```
+
 ### Setup
 
 Prerequisites: macOS with Apple Silicon (M1+), Homebrew, Python 3.12.
@@ -146,6 +164,25 @@ Her sey Microsoft Foundry Local ile cihaz uzerinde calisir; cevrimdisi, kapali a
 | Retrieval | scikit-learn TF-IDF + BM25 yeniden siralama | Embedding modeli gerektirmez; kucuk veri icin ideal |
 | Depolama | SQLite | Sunucusuz, tek dosya, Python'da yerlesik |
 | Web arayuzu | Streamlit | Saf Python web arayuzu |
+
+### Proje yapisi
+
+```
+ingest.py         Indeksi kur: docs/*.md'yi ## basliklarindan bol, TF-IDF egit,
+                  knowledge.db + vectorizer.pkl + tfidf_matrix.pkl yaz
+retrieval.py      Paylasilan retrieval: indeks yukleme, TF-IDF + BM25 yeniden
+                  siralama, guven kapisi (RETRIEVAL_MIN_SCORE), komsu-baglam
+foundry.py        Foundry Local baglantisi: port kesfi, servis auto-start,
+                  chat() yardimcisi (ham requests, govde-timeout yok)
+rag.py            Komut satiri RAG dongusu + answer_query() (evaluate.py kullanir)
+app.py            Streamlit cok turlu web arayuzu, cevap basina kaynak panelleri
+retrieve.py       Yalniz retrieval tanisi (en iyi chunk'lari yazar, model yok)
+evaluate.py       Etiketli degerlendirme: retrieval metrikleri; --generate ile
+                  uctan uca grounding / reddetme kontrolleri
+docs/             Bilgi tabani: 8 Markdown dosyasi (~39 chunk)
+tests/            pytest takimi (saf mantik, Foundry servisi gerekmez)
+.github/workflows CI: her push ve PR'da pytest calistirir
+```
 
 ### Kurulum
 
