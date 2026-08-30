@@ -71,6 +71,8 @@ source venvrag/bin/activate
 pip install -r requirements.txt
 ```
 
+`requirements.txt` is the full pinned lockfile; [requirements.in](requirements.in) lists just the three direct dependencies (scikit-learn, streamlit, requests). Use `requirements-dev.txt` to also get pytest.
+
 ### Usage
 
 ```bash
@@ -201,6 +203,8 @@ python3.12 -m venv venvrag
 source venvrag/bin/activate
 pip install -r requirements.txt
 ```
+
+`requirements.txt` tam surum kilitli listedir; [requirements.in](requirements.in) yalnizca uc dogrudan bagimliligi (scikit-learn, streamlit, requests) icerir. pytest'i de kurmak icin `requirements-dev.txt` kullanin.
 
 ### Kullanim
 

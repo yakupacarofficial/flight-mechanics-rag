@@ -1,2 +1,3 @@
+# Gelistirme bagimliliklari: calisma-zamani kilidi + test araclari.
 -r requirements.txt
 pytest==9.1.1

@@ -1,0 +1,11 @@
+# Ust seviye (dogrudan) calisma-zamani bagimliliklari.
+# requirements.txt bunlardan uretilmis, tam surum kilitli listedir; kurulum
+# icin onu kullanin. Kilidi yenilemek icin (pip-tools):  pip-compile requirements.in
+#
+# Not: onceki surumlerde kullanilan 'openai' artik import edilmiyor
+# (foundry.chat dogrudan requests kullaniyor); bir sonraki pip-compile'da
+# requirements.txt'den dusecektir.
+
+scikit-learn        # ingest.py, retrieval.py, evaluate.py (TF-IDF, cosine)
+streamlit           # app.py (web arayuzu)
+requests            # foundry.py (Foundry Local HTTP istekleri)
