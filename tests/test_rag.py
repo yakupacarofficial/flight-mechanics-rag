@@ -1,4 +1,6 @@
-"""rag.answer_query: sohbet gecmisinin mesajlara katilmasi ve kirpilmasi."""
+"""rag.answer_query: sohbet gecmisi + akis; _log_turn: JSONL tur logu."""
+import json
+
 import pytest
 from sklearn.feature_extraction.text import TfidfVectorizer
 
@@ -98,3 +100,26 @@ def test_stream_true_low_confidence_yields_no_answer_once(idx, captured_stream):
                                    "u", "mdl", vec, matrix, rows, stream=True)
     assert list(gen) == [rag.NO_ANSWER]
     assert "messages" not in captured_stream  # model cagrilmadi
+
+
+# ---- _log_turn: JSONL tur logu ------------------------------------
+
+def test_log_turn_writes_one_json_line_per_call(tmp_path, monkeypatch):
+    path = tmp_path / "rag.jsonl"
+    monkeypatch.setattr(rag, "LOG_PATH", str(path))
+    chunks = [{"source": "a.md", "section": "S", "score": 0.42131, "id": 0, "text": "x"}]
+    rag._log_turn("q1", chunks, "a real answer", 1234.56)
+    rag._log_turn("q2", chunks, rag.NO_ANSWER, 4.2)
+
+    lines = path.read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 2
+    r0 = json.loads(lines[0])
+    assert r0["question"] == "q1" and r0["answered"] is True
+    assert r0["total_ms"] == 1234.6
+    assert r0["chunks"][0] == {"source": "a.md", "section": "S", "score": 0.4213}
+    assert json.loads(lines[1])["answered"] is False
+
+
+def test_log_turn_is_noop_when_path_unset(monkeypatch):
+    monkeypatch.setattr(rag, "LOG_PATH", None)
+    rag._log_turn("q", [], "a", 1.0)  # patlamamali, dosya yazmamali

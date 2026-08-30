@@ -5,6 +5,10 @@ guven esiginin altindaysa model hic cagrilmaz, dogrudan NO_ANSWER doner.
 Onceki turlar baglama katilir (takip sorulari icin); retrieval yine
 yalnizca son soruya gore yapilir.
 """
+import json
+import os
+import time
+
 from foundry import chat, chat_stream, get_endpoint
 from retrieval import (
     NO_ANSWER, build_context, get_top_chunks, is_confident, load_index,
@@ -12,6 +16,25 @@ from retrieval import (
 
 # Modele tasinan sohbet gecmisinin ust siniri (mesaj sayisi = tur * 2).
 MAX_HISTORY_MESSAGES = 6
+
+# RAG_LOG=path.jsonl ayarliysa her tur (soru, chunk skorlari, sure) bu
+# dosyaya bir JSON satiri olarak eklenir. Sonradan analiz icin.
+LOG_PATH = os.environ.get("RAG_LOG")
+
+
+def _log_turn(question, chunks, answer, total_ms):
+    if not LOG_PATH:
+        return
+    rec = {
+        "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "question": question,
+        "answered": answer != NO_ANSWER,
+        "total_ms": round(total_ms, 1),
+        "chunks": [{"source": c["source"], "section": c["section"],
+                    "score": round(c["score"], 4)} for c in chunks],
+    }
+    with open(LOG_PATH, "a", encoding="utf-8") as f:
+        f.write(json.dumps(rec, ensure_ascii=False) + "\n")
 
 
 def answer_query(question, base_url, model, vectorizer, tfidf_matrix, rows,
@@ -58,6 +81,7 @@ if __name__ == "__main__":
         question = input("Soru: ").strip()
         if not question:
             break
+        t0 = time.perf_counter()
         stream, chunks = answer_query(
             question, url, model, vectorizer, tfidf_matrix, rows, history,
             stream=True,
@@ -71,6 +95,7 @@ if __name__ == "__main__":
         print("\n")
         print("Kaynaklar:", ", ".join(f"{c['source']}({c['section']})" for c in chunks))
         print("-" * 70)
+        _log_turn(question, chunks, answer, (time.perf_counter() - t0) * 1000)
         history += [{"role": "user", "content": question},
                     {"role": "assistant", "content": answer}]
         history = history[-MAX_HISTORY_MESSAGES:]
