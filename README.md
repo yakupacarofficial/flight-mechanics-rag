@@ -8,6 +8,12 @@ No cloud, no API keys, no data leaves the machine.
 
 *Built for the Microsoft Summer 2026 program.*
 
+## Demo
+
+A ~3-minute walkthrough — starting the app, a grounded answer with its sources, an out-of-scope refusal, and the evaluation run.
+
+https://github.com/user-attachments/assets/7fac4556-5eee-4318-8d71-afe9a0891399
+
 ---
 
 ## English
